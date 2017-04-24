@@ -294,10 +294,6 @@ class DSSA(BaseEstimator, ClassifierMixin):
         feed_dict[self.pair_input] = pair[:, :, :-2].reshape(batch_num, self.most_n_pair, 2, self.input_dim + 1)
         feed_dict[self.pair_target] = pair[:, :, -2].astype(np.int32)
         feed_dict[self.pair_weight] = pair[:, :, -1]
-        #if np.any(np.equal(feed_dict[self.context_input][:, :, -1], 0)):
-        #    raise ValueError('context_input has no query or subquery')
-        #if np.any(np.equal(feed_dict[self.pair_input][:, :, :, -1], 0)):
-        #    raise ValueError('pair_input has no query or subquery')
         return feed_dict
 
     def build_graph_test(self):
