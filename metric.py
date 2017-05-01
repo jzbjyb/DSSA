@@ -67,8 +67,8 @@ def ERR_IA(grade_list, subtopics=None, k=None, grade_max=None):
     '''
     grade_list, subtopics, k, grade_max = div_metric_param(grade_list, subtopics, k, grade_max)
     grade_list = (np.power(2, grade_list) - 1) / np.power(2, grade_max)
-    return np.dot([reduce(lambda t,i: [t[0]*(1-topic[i]), t[1]+t[0]*topic[i]/(i+1)] if i<k else t, range(len(topic)), [1,0])[1] \
-                   for topic in grade_list], subtopics)
+    return np.dot([reduce(lambda t,i: [t[0]*(1-topic[i]), t[1]+t[0]*topic[i]/(i+1)] if i<k else t,
+                          range(len(topic)), [1,0])[1] for topic in grade_list], subtopics)
 
 def best_alpha_nDCG(grade_list, alpha=0.5, subtopics=None, k=None, grade_max=None, reverse=False):
     '''
@@ -111,7 +111,8 @@ def alpha_nDCG(grade_list, alpha=0.5, subtopics=None, k=None, grade_max=None, no
     grade_list, subtopics, k, grade_max = div_metric_param(grade_list, subtopics, k, grade_max)
     alpha, n_subtopics, n_docs = 1 - alpha, grade_list.shape[0], grade_list.shape[1]
     grade_list = (grade_list>0).astype(int)
-    cum = reduce(lambda t,i:  [t[0]+(grade_list[:,i]), t[1]+np.sum(np.dot(np.power(alpha,t[0]), grade_list[:,i]))/np.log2(i+2)], \
+    cum = reduce(lambda t,i:  [t[0]+(grade_list[:,i]),
+                               t[1]+np.sum(np.dot(np.power(alpha,t[0]), grade_list[:,i]))/np.log2(i+2)],
                  range(k), [np.zeros(n_subtopics), 0])[1]
     if normalization is not None and normalization > 0:
         cum /= normalization

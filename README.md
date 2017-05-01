@@ -2,7 +2,7 @@
 Implementations of **D**ocument **S**equence with **S**ubtopic **A**ttention (DSSA) model described in paper:
 
 "Learning to Diversify Search Results via Subtopic Attention"
-by Zhengbao Jiang, Zhicheng Dou, Wayne Xin Zhao, Jian-Yun Nie, Ming Yue and Ji-Rong Wen.
+by Zhengbao Jiang, Ji-Rong Wen, Zhicheng Dou, Wayne Xin Zhao, Jian-Yun Nie and Ming Yue.
 
 ## Quick Start
 
@@ -30,6 +30,28 @@ EPO[3_0.1]	  train:0.293:510.472	   test:0.351
 
 where `0.279` is the pair classification accuracy, `544.187` is the log loss,
 `0.349` is the &#945;-nDCG of test queries.
+
+## How To Reproduce Experimental Results
+
+You need first download the required data (use `python run.py -h` to see details of required inputs):
+
+```shell
+$ cd DSSA # enter project root directory
+$ wget http://www.playbigdata.com/dou/DSSA/data_cv.tar.gz # download data
+$ tar xzvf data_cv.tar.gz # uncompress
+```
+
+Then run the model using downloaded data:
+
+```shell
+$ python run.py --cv --train_sample_path=data_cv/train_sample.data \
+$                    --test_sample_path=data_cv/test_sample.data \
+$                    --rel_feat_path=data_cv/rel_feat.csv \
+$                    --doc_emb_path=data_cv/doc.emb \
+$                    --query_emb_path=data_cv/query.emb
+```
+
+On our 24 core CPU machine, it takes roughly one day to complete the cross validation with final &#945;-nDCG around 0.45.
 
 ## How To Run On Your Dataset
 
@@ -172,7 +194,7 @@ The last `2` specifies the number of docs in the context and the number of pairs
 
 ```
 @inproceedings{Jiang:17SIGIR:DSSA,
-  author = {Jiang, Zhengbao and Dou, Zhicheng and Zhao, Wayne Xin and Nie, Jian-Yun and Yue, Ming and Wen, Ji-Rong}},
+  author = {Jiang, Zhengbao and Wen, Ji-Rong and Dou, Zhicheng and Zhao, Wayne Xin and Nie, Jian-Yun and Yue, Ming}},
   title = {Learning to Diversify Search Results via Subtopic Attention},
   booktitle = {Proceedings of the 40th SIGIR},
   year = {2017},

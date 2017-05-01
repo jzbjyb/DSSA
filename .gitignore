@@ -1,5 +1,9 @@
 model*
 checkpoint*
+*.out
+data_cv*
+data.md
+DSSA.html
 
 .idea
 

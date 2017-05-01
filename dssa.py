@@ -27,14 +27,14 @@ def tensormul(tensor, arrs):
         tensor *= arr
     return tf.reduce_sum(tensor, list(range(1, len(ultimate))))
 
-def interaction_op(emb1, emb2, var_name, op='general'):
+def interaction_op(emb1, emb2, var_name, op='general', attn=False):
     s1 = emb1.get_shape()[1].value
     s2 = emb2.get_shape()[1].value
     if op == 'general':
         variable = vs.get_variable(var_name, [s1, s2])
         return tensormul(variable, [emb1, emb2])
     elif op == 'dot':
-        return tf.reduce_sum(emb1 * emb2, reduction_indices=1)
+        return tf.reduce_sum(emb1 * emb2, reduction_indices=1) * (-1 if attn else 1)
 
 class RNNCellBase(core_rnn_cell.RNNCell):
     def zero_state_np(self, batch_size, dtype):
@@ -59,7 +59,8 @@ class DSSACell(RNNCellBase):
             raise ValueError('pool not valid, it should be one of {}'
                              .format(', '.join(map(lambda x: '"' + x + '"', DSSACell.VALID_POOL))))
         if nest.is_sequence(cell.state_size) != state_is_tuple:
-            raise ValueError('base cell state_is_tuple is not consistent with the current. base state size is: {}'.format(cell.state_size))
+            raise ValueError('base cell state_is_tuple is not consistent with the current. '
+                             'base state size is: {}'.format(cell.state_size))
         self.cell = cell
         self.n_doc_emb = n_doc_emb
         self.n_rel_feat = n_rel_feat
@@ -90,30 +91,41 @@ class DSSACell(RNNCellBase):
                 to_attn_len = tf.to_int32(tf.reduce_max(array_ops.slice(inputs, [0, input_dim - 1], [-1, -1]))) - 1
                 to_attn_len = tf.maximum(to_attn_len, 0) # avoid bug for paddings
                 query_rel = array_ops.slice(inputs, [0, 0], [-1, self.n_rel_feat])
-                subquery_rel = tf.reshape(array_ops.slice(inputs, [0, self.n_rel_feat], [-1, self.n_rel_feat * to_attn_len]),
+                subquery_rel = tf.reshape(array_ops.slice(inputs, [0, self.n_rel_feat],
+                                                          [-1, self.n_rel_feat * to_attn_len]),
                                           [batch_size, to_attn_len, self.n_rel_feat])
                 doc_emb = array_ops.slice(inputs, [0, self.n_rel_feat * self.most_n_subquery], [-1, self.n_doc_emb])
-                query_emb = array_ops.slice(inputs, [0, self.n_rel_feat * self.most_n_subquery + self.n_doc_emb], [-1, self.n_query_emb])
-                to_attn = tf.reshape(array_ops.slice(inputs, [0, self.n_rel_feat * self.most_n_subquery + self.n_doc_emb + self.n_query_emb + 1],
-                                                     [-1, (self.n_query_emb + 1) * to_attn_len]),
-                                     [batch_size, to_attn_len, self.n_query_emb + 1])
+                query_emb = array_ops.slice(inputs,
+                                            [0, self.n_rel_feat * self.most_n_subquery + self.n_doc_emb],
+                                            [-1, self.n_query_emb])
+                to_attn = tf.reshape(array_ops.slice(
+                    inputs,
+                    [0, self.n_rel_feat * self.most_n_subquery + self.n_doc_emb + self.n_query_emb + 1],
+                    [-1, (self.n_query_emb + 1) * to_attn_len]), [batch_size, to_attn_len, self.n_query_emb + 1])
                 initial_weight = to_attn[:, :, self.n_query_emb]
                 subquery_emb = to_attn[:, :, :self.n_query_emb]
                 last_state = state[:, :self.cell.state_size]
                 last_attn_rnn = array_ops.slice(state, [0, self.cell.state_size], [-1, to_attn_len])
-                last_attn_pool = array_ops.slice(state, [0, self.cell.state_size + self.most_n_subquery], [-1, to_attn_len])
+                last_attn_pool = array_ops.slice(state,
+                                                 [0, self.cell.state_size + self.most_n_subquery],
+                                                 [-1, to_attn_len])
                 last_attn = last_attn_rnn + last_attn_pool
                 last_attn = tf.nn.softmax(last_attn + tf.log(initial_weight))
             with vs.variable_scope('DocumentSequenceRepresentation'):
                 cur_output, cur_state = self.cell(doc_emb, last_state)
             with vs.variable_scope('Scoring'):
-                lambda_factor = vs.get_variable('Lambda', [1], initializer=tf.constant_initializer(self.lambdaa, dtype=tf.float32), trainable=False)
+                lambda_factor = vs.get_variable('Lambda', [1],
+                                                initializer=tf.constant_initializer(self.lambdaa, dtype=tf.float32),
+                                                trainable=False)
                 # diversity score
                 div_score = tf.zeros([batch_size])
                 relw = vs.get_variable('RelW', [self.n_rel_feat, 1])
                 sub_rel = tf.reduce_sum(subquery_rel * tf.reshape(relw, [self.n_rel_feat]), reduction_indices=2)
                 div_score += tf.reduce_sum(sub_rel * last_attn, reduction_indices=1)
-                div_score += interaction_op(doc_emb, tf.reduce_sum(tf.expand_dims(last_attn, -1) * subquery_emb, reduction_indices=1), 'OutW', op=self.op)
+                div_score += interaction_op(doc_emb,
+                                            tf.reduce_sum(tf.expand_dims(last_attn, -1) * subquery_emb,
+                                                          reduction_indices=1),
+                                            'OutW', op=self.op)
                 # relevance score
                 rel_score = tf.zeros([batch_size])
                 rel_score += tf.reshape(tf.matmul(query_rel, relw), [batch_size])
@@ -122,20 +134,26 @@ class DSSACell(RNNCellBase):
                 score = lambda_factor * div_score + (1.0 - lambda_factor) * rel_score
             with vs.variable_scope('SubtopicAttention'):
                 # rnn attention part
-                attn_rnn = tf.reshape(interaction_op(tf.reshape(tf.tile(cur_output, [1, to_attn_len]), [-1, self.cell.output_size]),
-                                                     tf.reshape(subquery_emb, [-1, self.n_query_emb]), 'AttnW', op=self.op),
-                                      [batch_size, to_attn_len])
+                attn_rnn = tf.reshape(interaction_op(
+                    tf.reshape(tf.tile(cur_output, [1, to_attn_len]), [-1, self.cell.output_size]),
+                    tf.reshape(subquery_emb, [-1, self.n_query_emb]), 'AttnW', op=self.op, attn=True),
+                    [batch_size, to_attn_len])
                 # pooling attention part
                 attn_relw = vs.get_variable('AttnRelW', [self.n_rel_feat, 1])
-                attn_sub_rel = tf.reduce_sum(subquery_rel * tf.reshape(attn_relw, [self.n_rel_feat]), reduction_indices=2)
+                attn_sub_rel = tf.reduce_sum(subquery_rel * tf.reshape(attn_relw, [self.n_rel_feat]),
+                                             reduction_indices=2)
                 if self.pool == 'max':
-                    attn_pool = tf.reduce_max(tf.stack([attn_sub_rel, last_attn_pool], axis=2), reduction_indices=2)
+                    attn_pool = tf.reduce_max(tf.stack([attn_sub_rel, last_attn_pool], axis=2),
+                                              reduction_indices=2)
                 elif self.pool == 'min':
-                    attn_pool = tf.reduce_min(tf.stack([attn_sub_rel, last_attn_pool], axis=2), reduction_indices=2)
+                    attn_pool = tf.reduce_min(tf.stack([attn_sub_rel, last_attn_pool], axis=2),
+                                              reduction_indices=2)
             score = tf.reshape(score, [batch_size, 1])
             next_state = (cur_state,
-                          tf.concat([attn_rnn, tf.zeros((batch_size, self.most_n_subquery - to_attn_len))], axis=1),
-                          tf.concat([attn_pool, tf.zeros((batch_size, self.most_n_subquery - to_attn_len))], axis=1))
+                          tf.concat([attn_rnn,
+                                     tf.zeros((batch_size, self.most_n_subquery - to_attn_len))], axis=1),
+                          tf.concat([attn_pool,
+                                     tf.zeros((batch_size, self.most_n_subquery - to_attn_len))], axis=1))
             if self.state_is_tuple:
                 return score, next_state
             return score, tf.concat(list(next_state), axis=1)
@@ -240,12 +258,14 @@ class DSSA(BaseEstimator, ClassifierMixin):
             raise ValueError('optimization not valid, it should be one of {}'
                              .format(', '.join(map(lambda x: '"' + x + '"', DSSA.VALID_OPTIMIZATION))))
         self.input_dim = 1 + self.most_n_subquery
-        self.expand_input_dim = self.n_rel_feat * self.most_n_subquery + self.n_doc_emb + (self.n_query_emb + 1) * self.most_n_subquery
+        self.expand_input_dim = \
+            self.n_rel_feat * self.most_n_subquery + self.n_doc_emb + (self.n_query_emb + 1) * self.most_n_subquery
         if self.reuse_model and not hasattr(self, 'session_'): # read model from file
             self.graph_ = tf.Graph()
             with self.graph_.as_default():
                 tf.set_random_seed(self.random_seed)
-                with vs.variable_scope('DSSA', initializer=tf.uniform_unit_scaling_initializer(seed=self.random_seed)) as scope:
+                with vs.variable_scope('DSSA', initializer=
+                tf.uniform_unit_scaling_initializer(seed=self.random_seed)) as scope:
                     self.build_graph()
                     scope.reuse_variables()
                     self.build_graph_test()
@@ -266,7 +286,8 @@ class DSSA(BaseEstimator, ClassifierMixin):
     def weights(self):
         if not hasattr(self, 'session_'):
             raise AttributeError('need fit or fit_iterable to be called before getting weights')
-        return [(v.name, v.eval(self.session_)) for v in self.graph_.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='DSSA')]
+        return [(v.name, v.eval(self.session_))
+                for v in self.graph_.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='DSSA')]
 
     def batcher(self, X, y=None):
         for q in X:
@@ -282,12 +303,16 @@ class DSSA(BaseEstimator, ClassifierMixin):
 
     def batch_to_feeddict_listpair(self, X, y):
         batch_num = X.shape[0]
-        actual_dim = self.most_n_doc * (self.input_dim + 1) + self.most_n_pair * (2 * (self.input_dim + 1) + 1 + 1) + 1 + 1
+        actual_dim = self.most_n_doc * (self.input_dim + 1) + \
+                     self.most_n_pair * (2 * (self.input_dim + 1) + 1 + 1) + \
+                     1 + 1
         if X.shape[1] != actual_dim:
-            raise ValueError('input X\'s dimension is unexpected. {} is desired while we got {}'.format(actual_dim, X.shape[1]))
+            raise ValueError('input X\'s dimension is unexpected. '
+                             '{} is desired while we got {}'.format(actual_dim, X.shape[1]))
         # assemble feed_dict
         feed_dict = {}
-        feed_dict[self.context_input] = X[:, :self.most_n_doc * (self.input_dim + 1)].reshape(batch_num, self.most_n_doc, self.input_dim + 1)
+        feed_dict[self.context_input] = \
+            X[:, :self.most_n_doc * (self.input_dim + 1)].reshape(batch_num, self.most_n_doc, self.input_dim + 1)
         feed_dict[self.context_input_len] = X[:, -2]
         feed_dict[self.pair_input_len] = X[:, -1]
         pair = X[:, self.most_n_doc * (self.input_dim + 1):-2].reshape(batch_num, self.most_n_pair, -1)
@@ -302,13 +327,17 @@ class DSSA(BaseEstimator, ClassifierMixin):
         with vs.variable_scope('TestInput'):
             self.test_input = tf.placeholder(tf.float32, shape=[None, None, self.input_dim + 1], name='test_input')
             self.test_input_len = tf.placeholder(tf.int32, shape=[None], name='test_input_len')
-            self.test_initial_state = tf.placeholder(tf.float32, shape=[None, self.cell.state_size], name='test_initial_state')
+            self.test_initial_state = tf.placeholder(tf.float32,
+                                                     shape=[None, self.cell.state_size],
+                                                     name='test_initial_state')
             dim = tf.shape(self.test_input)
             batch_num = dim[0]
             doc_num = dim[1]
         with vs.variable_scope('EmbeddingLookup'):
-            tid = tf.nn.embedding_lookup(self.doc_emb_W, tf.to_int32(self.test_input[:, :, :1]))
-            tiq = tf.nn.embedding_lookup(self.query_emb_W, tf.to_int32(self.test_input[:, :, 1:1 + self.most_n_subquery]))
+            tid = tf.nn.embedding_lookup(self.doc_emb_W,
+                                         tf.to_int32(self.test_input[:, :, :1]))
+            tiq = tf.nn.embedding_lookup(self.query_emb_W,
+                                         tf.to_int32(self.test_input[:, :, 1:1 + self.most_n_subquery]))
             test_input_expand = tf.concat([tf.reshape(tid, [batch_num, doc_num, -1]),
                                            tf.reshape(tiq, [batch_num, doc_num, -1]),
                                            self.test_input[:, :, self.input_dim:]], axis=2)
@@ -320,7 +349,8 @@ class DSSA(BaseEstimator, ClassifierMixin):
                 dtype=tf.float32,
                 sequence_length=self.test_input_len,
                 inputs=test_input_expand)
-            self.outputs_test = tf.reshape(select_by_index(outputs, self.test_input_len, zero_base=False), [batch_num])
+            self.outputs_test = tf.reshape(select_by_index(outputs, self.test_input_len, zero_base=False),
+                                           [batch_num])
 
     def build_graph(self):
         if self.optimization == 'listpair':
@@ -328,27 +358,39 @@ class DSSA(BaseEstimator, ClassifierMixin):
 
     def build_graph_listpair(self):
         with vs.variable_scope('TrainInput'):
-            self.context_input = tf.placeholder(tf.float32, shape=[None, self.most_n_doc, self.input_dim + 1], name='context_input')
+            self.context_input = tf.placeholder(tf.float32, shape=[None, self.most_n_doc, self.input_dim + 1],
+                                                name='context_input')
             self.context_input_len = tf.placeholder(tf.int32, shape=[None], name='context_input_len')
-            self.pair_input = tf.placeholder(tf.float32, shape=[None, self.most_n_pair, 2, self.input_dim + 1], name='pair_input_raw')
+            self.pair_input = tf.placeholder(tf.float32, shape=[None, self.most_n_pair, 2, self.input_dim + 1],
+                                             name='pair_input_raw')
             self.pair_weight = tf.placeholder(tf.float32, shape=[None, self.most_n_pair], name='pair_weight_raw')
             self.pair_target = tf.placeholder(tf.int32, shape=[None, self.most_n_pair], name='pair_target_raw')
             self.pair_input_len = tf.placeholder(tf.int32, shape=[None], name='pair_input_len')
         with vs.variable_scope('TrainInputShape'):
             batch_num = tf.shape(self.context_input)[0]
         with vs.variable_scope('EmbeddingLookup'):
-            self.doc_emb_W = tf.constant(self.doc_emb, dtype=tf.float32, name='doc_emb_W')
-            self.query_emb_W = tf.constant(self.query_emb, dtype=tf.float32, name='query_emb_W')
+            self.doc_emb_W = tf.get_variable('doc_emb_W',self.doc_emb.shape,
+                                             initializer=tf.constant_initializer(self.doc_emb),
+                                             trainable=False)
+            #self.doc_emb_W = tf.constant(self.doc_emb, dtype=tf.float32, name='doc_emb_W')
+            self.query_emb_W = tf.get_variable('query_emb_W',self.query_emb.shape,
+                                               initializer=tf.constant_initializer(self.query_emb),
+                                               trainable=False)
+            #self.query_emb_W = tf.constant(self.query_emb, dtype=tf.float32, name='query_emb_W')
             # look up context_input doc & query embedding
-            cid = tf.nn.embedding_lookup(self.doc_emb_W, tf.to_int32(self.context_input[:, :, :1]))
-            ciq = tf.nn.embedding_lookup(self.query_emb_W, tf.to_int32(self.context_input[:, :, 1:1 + self.most_n_subquery]))
+            cid = tf.nn.embedding_lookup(self.doc_emb_W,
+                                         tf.to_int32(self.context_input[:, :, :1]))
+            ciq = tf.nn.embedding_lookup(self.query_emb_W,
+                                         tf.to_int32(self.context_input[:, :, 1:1 + self.most_n_subquery]))
             context_input_expand = tf.concat([tf.reshape(cid, [batch_num, self.most_n_doc, -1]),
                                               tf.reshape(ciq, [batch_num, self.most_n_doc, -1]),
                                               self.context_input[:, :, self.input_dim:]], axis=2)
             context_input_expand.set_shape([None, self.most_n_doc, self.expand_input_dim + 1])
             # look up pair_input doc & query embedding
-            pid = tf.nn.embedding_lookup(self.doc_emb_W, tf.to_int32(self.pair_input[:, :, :, :1]))
-            piq = tf.nn.embedding_lookup(self.query_emb_W, tf.to_int32(self.pair_input[:, :, :, 1:1 + self.most_n_subquery]))
+            pid = tf.nn.embedding_lookup(self.doc_emb_W,
+                                         tf.to_int32(self.pair_input[:, :, :, :1]))
+            piq = tf.nn.embedding_lookup(self.query_emb_W,
+                                         tf.to_int32(self.pair_input[:, :, :, 1:1 + self.most_n_subquery]))
             pair_input_expand = tf.concat([tf.reshape(pid, [batch_num, self.most_n_pair, 2, -1]),
                                            tf.reshape(piq, [batch_num, self.most_n_pair, 2, -1]),
                                            self.pair_input[:, :, :, self.input_dim:]], axis=3)
@@ -386,7 +428,8 @@ class DSSA(BaseEstimator, ClassifierMixin):
         with vs.variable_scope('Loss'):
             self.outputs = tf.reshape(outputs, [actual_batch_num, 2])
             self.prob = tf.nn.softmax(self.outputs, name='pair_prob')
-            target = tf.reshape(select_by_index(self.prob, pair_target_selected, zero_base=True), [actual_batch_num])
+            target = tf.reshape(select_by_index(self.prob, pair_target_selected, zero_base=True),
+                                [actual_batch_num])
             self.accuracy = tf.reduce_sum(tf.cast(target > 0.5, tf.float32)) /\
                             tf.cast(tf.reduce_prod(tf.shape(target)), tf.float32)
             self.log_loss = -tf.reduce_sum(pair_weight_selected * tf.log(target), name='log_loss')
@@ -402,7 +445,8 @@ class DSSA(BaseEstimator, ClassifierMixin):
             self.graph_ = tf.Graph()
             with self.graph_.as_default():
                 tf.set_random_seed(self.random_seed)
-                with vs.variable_scope('DSSA', initializer=tf.uniform_unit_scaling_initializer(seed=self.random_seed)) as scope:
+                with vs.variable_scope('DSSA', initializer=
+                tf.uniform_unit_scaling_initializer(seed=self.random_seed)) as scope:
                     self.build_graph()
                     scope.reuse_variables()
                     self.build_graph_test()
@@ -423,12 +467,14 @@ class DSSA(BaseEstimator, ClassifierMixin):
                     loss_list.append(log_loss)
             if self.verbose: # output epoch stat
                 print('{:<10}\t{:>7}:{:>5.3f}:{:>7.3f}'
-                      .format('EPO[{}_{:>3.1f}]'.format(epoch, (time.time() - start)/60), 'train', np.mean(accuracy_list), np.mean(loss_list)), end='')
+                      .format('EPO[{}_{:>3.1f}]'.format(epoch, (time.time() - start)/60),
+                              'train', np.mean(accuracy_list), np.mean(loss_list)), end='')
             if self.save_epochs and epoch % self.save_epochs == 0: # save the model
                 if self.save_model:
                     self.saver.save(self.session_, self.save_model)
                 yield
-            elif epoch == self.n_epochs and self.save_epochs and self.n_epochs % self.save_epochs != 0:  # save the final model
+            # save the final model
+            elif epoch == self.n_epochs and self.save_epochs and self.n_epochs % self.save_epochs != 0:
                 if self.save_model:
                     self.saver.save(self.session_, self.save_model)
                 yield
@@ -455,8 +501,8 @@ class DSSA(BaseEstimator, ClassifierMixin):
                     self.test_input: batch_input,
                     self.test_input_len: np.ones((len(remain_ind))),
                     self.test_initial_state:
-                        np.tile(last_states, [len(remain_ind)]).reshape(len(remain_ind), self.cell.state_size) if r > 0
-                        else self.cell.zero_state_np(len(remain_ind), np.float32)
+                        np.tile(last_states, [len(remain_ind)]).reshape(len(remain_ind), self.cell.state_size)
+                        if r > 0 else self.cell.zero_state_np(len(remain_ind), np.float32)
                 })
                 next = np.argmax(out)
                 select.append(remain_ind[next])

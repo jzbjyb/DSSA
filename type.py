@@ -50,7 +50,9 @@ class DiversityQuery:
             arr = np.zeros(length)
             arr[indice] = values
             return arr
-        self._grade_matrix = np.array([array_set(len(self._subtopics_map), [self._subtopics_map[t] for t in d.subtopics], 1) for d in self.docs])
+        self._grade_matrix = np.array([array_set(len(self._subtopics_map),
+                                                 [self._subtopics_map[t] for t in d.subtopics], 1)
+                                       for d in self.docs])
 
     def get_metric(self, metric='alpha_nDCG', normalize=True):
         '''
@@ -72,7 +74,8 @@ class DiversityQuery:
         :param as_index: whether use query and doc as index
         :return: a DataFrame object
         '''
-        df = pd.DataFrame({'query': np.repeat(self.query, len(self.docs)), 'doc': list(map(lambda x: x.docid, self.docs))})
+        df = pd.DataFrame({'query': np.repeat(self.query, len(self.docs)),
+                           'doc': list(map(lambda x: x.docid, self.docs))})
         if as_index:
             return df.set_index(['query', 'doc'])
         return df
@@ -85,7 +88,8 @@ class DiversityQuery:
         if normalize:
             if self.ALPHA_NDCG_GLOBAL_BEST and self.qid in self.ALPHA_NDCG_GLOBAL_BEST:
                 best_k = min(self.ALPHA_NDCG_GLOBAL_BEST[self.qid]._grade_matrix.shape[0], self.K)
-                best = best_alpha_nDCG(self.ALPHA_NDCG_GLOBAL_BEST[self.qid]._grade_matrix.T, alpha=self.ALPHA, k=min(best_k, k))
+                best = best_alpha_nDCG(self.ALPHA_NDCG_GLOBAL_BEST[self.qid]._grade_matrix.T,
+                                       alpha=self.ALPHA, k=min(best_k, k))
             else:
                 best = best_alpha_nDCG(self._grade_matrix.T, alpha=self.ALPHA, k=k)
             alpha_nDCG_normalize = alpha_nDCG(self._grade_matrix.T, alpha=self.ALPHA, k=k, normalization=best[0])
@@ -143,7 +147,8 @@ class DiversityQuery:
         result = []
         def get_pairs(dq, context, threshold=0):
             ind = [i for i in range(len(dq.docs)) if i not in context]
-            metrics = [DiversityQuery(dq.query, dq.qid, dq.subtopics, dq.docs[context + [i]]).get_metric(metric=metric, normalize=False)
+            metrics = [DiversityQuery(dq.query, dq.qid, dq.subtopics, dq.docs[context + [i]])
+                           .get_metric(metric=metric, normalize=False)
                        for i in range(len(dq.docs)) if i not in context]
             arg = np.argsort(metrics)
             pairs = []
@@ -167,10 +172,12 @@ class DiversityQuery:
             if use_best_sample:
                 pairs = get_pairs(best, list(range(i)))
                 if len(pairs) > 0:
-                    result.append((best.docids[list(range(i))].tolist(), [(best.docids[p[0]], best.docids[p[1]], p[2]) for p in pairs]))
+                    result.append((best.docids[list(range(i))].tolist(),
+                                   [(best.docids[p[0]], best.docids[p[1]], p[2]) for p in pairs]))
             if i > 0 and perm_num > 0:
                 for dq in get_perm(best, top=i, n=min(perm_num, scipy.math.factorial(i))):
                     pairs = get_pairs(dq, list(range(i)))
                     if len(pairs) > 0:
-                        result.append((dq.docids[list(range(i))], [(dq.docids[p[0]], dq.docids[p[1]], p[2]) for p in pairs]))
+                        result.append((dq.docids[list(range(i))],
+                                       [(dq.docids[p[0]], dq.docids[p[1]], p[2]) for p in pairs]))
         return result

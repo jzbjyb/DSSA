@@ -69,7 +69,8 @@ def load_query_suggestion(filename):
 def load_rank_docs(filename, top=100):
     '''
     load rank from run file
-    :param filename: run file name, the format of the file is consistent with TREC, see http://trec.nist.gov/ for more info
+    :param filename: run file name, the format of the file is consistent with TREC,
+        see http://trec.nist.gov/ for more info
     :param top: number of top docs
     :return: a dict with query as key and doc sequence as value
     '''
@@ -96,7 +97,8 @@ def load_datasets(filenames, qrels=None, topics_xmls=None, top=100):
     '''
     queries, topics, judge = [None] * 3
     for i in range(len(filenames)):
-        r = load_dataset(filenames[i], qrels[i] if qrels else None, topics_xmls[i] if topics_xmls else None, top=top)
+        r = load_dataset(filenames[i], qrels[i] if qrels else None,
+                         topics_xmls[i] if topics_xmls else None, top=top)
         queries = r[0] if not queries else queries + r[0]
         if not topics:
             topics = r[1]
@@ -138,7 +140,8 @@ def load_TREC_diversity(qrel, topics_xml, restrict=None):
     :return:
         queries (topics): a dict with topic id as key and 'query', 'description', 'type', 'subtopics' as value
             'subtopics' is a dict with subtopic id as key and 'description', 'type' as value
-        judge: a dict with topic id as key and docid as keys in value, each docid corresponds to a dict of subtopic id, with relevance judgement as value
+        judge: a dict with topic id as key and docid as keys in value,
+            each docid corresponds to a dict of subtopic id, with relevance judgement as value
     '''
     # load topics and subtopics
     topics = defaultdict(lambda: {})
@@ -184,8 +187,10 @@ def load_TREC_diversity(qrel, topics_xml, restrict=None):
             judge[cqid][cdocid] = ctopic
     print('load judgement from [{}]'.format(qrel))
     unique_docs = set(np.concatenate([list(qv.keys()) for qk,qv in judge.items()]))
-    unique_query_docs = set(np.concatenate([[qk+'#'+k for k in list(qv.keys())] for qk,qv in judge.items()]))
-    unique_labeled_docs = set(np.concatenate([[dk for dk,dv in qv.items() if len(dv)>0] for qk,qv in judge.items()]))
+    unique_query_docs = set(np.concatenate([[qk+'#'+k for k in list(qv.keys())]
+                                            for qk,qv in judge.items()]))
+    unique_labeled_docs = set(np.concatenate([[dk for dk,dv in qv.items() if len(dv)>0]
+                                              for qk,qv in judge.items()]))
     print('totally {} queries, {} unique docs, {} unique query-docs, {} unique labeled docs'.
           format(len(topics), len(unique_docs), len(unique_query_docs), len(unique_labeled_docs)))
     return topics, judge
@@ -199,7 +204,7 @@ def judgedict_to_query(ranks, topics):
     '''
     result = []
     for qk,qv in ranks:
-        dq = DiversityQuery(topics[qk]['query'], qk, set(topics[qk]['subtopics'].keys()), \
+        dq = DiversityQuery(topics[qk]['query'], qk, set(topics[qk]['subtopics'].keys()),
                             [DiversityDoc(dk, set(dv)) for dk,dv in qv])
         result.append(dq)
     return result
@@ -234,7 +239,8 @@ if __name__ == '__main__':
                 continue
             sam[dq.qid] = []
             basedq = dq.top(MAXDOC).best_rank('alpha_nDCG', top_n=MAXDOC)
-            sam[dq.qid] = DiversityQuery.get_pair_samples(basedq, metric='alpha_nDCG', use_best_sample=True, perm_num=PERM_NUM)
+            sam[dq.qid] = DiversityQuery\
+                .get_pair_samples(basedq, metric='alpha_nDCG', use_best_sample=True, perm_num=PERM_NUM)
         pickle.dump(sam, open(OUT, 'wb'), True)
     elif OP == 2:
         '''
@@ -248,7 +254,8 @@ if __name__ == '__main__':
         pickle.dump(result, open('data/test_sample_dq.data', 'wb'), True)
     elif OP == 3:
         '''
-        generate DiversityQuery objects of best ranking, which means that all docs with positive judgement are included
+        generate DiversityQuery objects of best rankings,
+        which means that all docs with positive judgement are included
         the generated objects are used as the normalization when calculating alpha-nDCG
         '''
         best_result_with_judge = [(q, [(d, judge[q][d].keys()) for d in docs.keys() if len(judge[q][d].keys()) > 0])
