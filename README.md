@@ -203,7 +203,11 @@ The last `2` specifies the number of docs in the context and the number of pairs
 The query suggestions and baseline runs can be downloaded from
 [http://www.playbigdata.com/dou/hdiv/][link:hdiv]
 
+The data required to reproduce the experimental results can be downloaded from
+[http://www.playbigdata.com/dou/DSSA/][link:dssa]
+
 For any issues with the code, feel free to contact `rucjzb AT 163.com`
 
 
 [link:hdiv]: http://www.playbigdata.com/dou/hdiv/
+[link:dssa]: http://www.playbigdata.com/dou/DSSA/

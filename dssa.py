@@ -488,7 +488,7 @@ class DSSA(BaseEstimator, ClassifierMixin):
     def decision_function(self, X):
         self.check_params()
         if not hasattr(self, 'session_'):
-            raise AttributeError('need fit or fit_iterable to be called before getting weights')
+            raise AttributeError('need fit or fit_iterable to be called before prediction')
         ranks = []
         for q in X:
             select = []
