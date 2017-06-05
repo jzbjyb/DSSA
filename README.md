@@ -1,18 +1,18 @@
 # DSSA
-Implementations of **D**ocument **S**equence with **S**ubtopic **A**ttention (DSSA) model described in paper:
+Implementations of **D**ocument **S**equence with **S**ubtopic **A**ttention (DSSA) model described in the paper:
 
-"Learning to Diversify Search Results via Subtopic Attention"
-by Zhengbao Jiang, Ji-Rong Wen, Zhicheng Dou, Wayne Xin Zhao, Jian-Yun Nie and Ming Yue.
+"Learning to Diversify Search Results via Subtopic Attention" <br/>
+Zhengbao Jiang, Ji-Rong Wen, Zhicheng Dou, Wayne Xin Zhao, Jian-Yun Nie, and Ming Yue.
 
 ## Quick Start
 
 The project is implemented using python 3.5 and tested in Linux environment.
-Follow the steps to quickly run the model.
+Follow the steps to quickly run the model:
 
 ```shell
 $ cd DSSA # enter project root directory
-$ virtualenv -p /path/to/python3.5_interpreter dssa_env # build virtual env using python3.5
-$ source dssa_env/bin/activate # activate virtual env
+$ virtualenv -p /path/to/python3.5_interpreter dssa_env # build virtual environment using python3.5
+$ source dssa_env/bin/activate # activate virtual environment
 $ pip install -r etc/requirements.txt # install required packages
 $ python run.py # train and test the model based on a small dataset
 ```
@@ -29,11 +29,11 @@ EPO[3_0.1]	  train:0.293:510.472	   test:0.351
 ```
 
 where `0.279` is the pair classification accuracy, `544.187` is the log loss,
-`0.349` is the &#945;-nDCG of test queries.
+`0.349` is the &#945;-nDCG of the test queries.
 
 ## How To Reproduce Experimental Results
 
-You need first download the required data (use `python run.py -h` to see details of required inputs):
+You need first download the required data (use `python run.py -h` to see details of the required inputs):
 
 ```shell
 $ cd DSSA # enter project root directory
@@ -70,7 +70,7 @@ The model configuration (`Config` class in `run.py`) must by set manually.
   ...
 }
 ```
-the first sample of `query_id_1` means that under context `[d1, d2]` we have two pairs: `d4 > d3` and `d4 > d5`.
+The first sample of `query_id_1` means that under context `[d1, d2]` we have two pairs: `d4 > d3` and `d4 > d5`.
 You can use the following code to check file `data/train_sample.data` to better understand the format:
 ```python
 import pickle
@@ -111,7 +111,7 @@ To generate list-pairwise samples, you need TREC run files (baseline ranking),
 offical Web Treck topic files, and diversity judgement files. We already provide you with these files in
 `data/baseline_run`, `data/wt_topics`, and `data/wt_judge` folders respectively.
 We use 4 Web Track ranging from 2009 to 2012 and the baseline rankings are generated from indri online service.
-Then run the following to generate train samples
+Run the following to generate train samples:
 ```shell
 $ python prep.py 1 20 5 train_sample.data # use top 20 docs and 5 negative random permutations
 ```
@@ -157,7 +157,7 @@ for qid in all_queries:
   cur['test_x'] = ... # test data (candidate docs) for this query
   X.append(cur)
   y.append(dq) # dq is the DiversityQuery object for this query
-tuned_params = {'learning_rate': [0.1, 0.01], 'n_epochs': [10, 20]}
+tuned_params = {'learning_rate': [0.01, 0.1], 'n_epochs': [10, 20]}
 gs = GridSearchCV(dssa, tuned_params, cv=2)
 gs.fit(np.array(X), np.array(y))
 print(gs.best_params_)
@@ -166,16 +166,16 @@ How to generate `train_x` and `test_x` and why we need these two distinct field 
 I will try to explain this as clearly as possible.
 
 The `X` and `y` must be indexed by query (i.e. `X.shape[0] = y.shape[0] = num_of_query`),
-because in cross validation, we want to train and valid the model on distinct set of queries.
-Training needs list-pairwise samples of a query, while test only needs all the candidate docs of a query.
-That's why we use two field (`train_x` and `test_x`) in one query.
+because in cross validation, we train and validate the model on distinct set of queries.
+Training needs list-pairwise samples of a query, while validation (testing) only needs all the candidate docs of a query.
+That's why we use two fields (`train_x` and `test_x`) in one query.
 
 `test_x` is a `[n_candidate_docs, dim_of_each_doc]` numpy.ndarray, while
 `train_x` is a `[n_sample, most_n_doc * dim_of_each_doc + most_n_pair * (2 * dim_of_each_doc + 2) + 2]` numpy.ndarray.
 
 The dimension of `test_x` is easy to understand. `dim_of_each_doc = 1 + most_n_subtopic + 1`
 which contains the index of the doc (the first `1`) and indexes of its subtopics (the `most_n_subtopic`).
-Because different queries have different number of subtopics,
+Because different queries have different numbers of subtopics,
 we need the last `1` to specify the number of the subtopics of this doc.
 Actually, only the first column of `test_x` is different for each row because for the same query,
 different docs share the same subtopics. The reason of this redundancy is for convenience of using RNN in tensorflow.
@@ -184,7 +184,7 @@ The dimension of `train_x` is hard to understand. In order to understand this, y
 you know how list-pairwise sampling works. In list-pairwise sampling, 
 a sample contains a context (previous selected docs) and a pair of docs.
 The basic idea is that we organize all samples with the same context in one row (for the sake of efficiency).
-So `n_sample` is the number of unique context for a query;
+So `n_sample` is the number of the unique contexts for a query;
 `most_n_doc` is the maximun length of a context;
 `most_n_pair` is the maximun number of pairs of a context.
 The second last `2` is for pair preference judgement (0 or 1) and pair weight.
@@ -194,7 +194,7 @@ The last `2` specifies the number of docs in the context and the number of pairs
 
 ```
 @inproceedings{Jiang:17SIGIR:DSSA,
-  author = {Jiang, Zhengbao and Wen, Ji-Rong and Dou, Zhicheng and Zhao, Wayne Xin and Nie, Jian-Yun and Yue, Ming}},
+  author = {Jiang, Zhengbao and Wen, Ji-Rong and Dou, Zhicheng and Zhao, Wayne Xin and Nie, Jian-Yun and Yue, Ming},
   title = {Learning to Diversify Search Results via Subtopic Attention},
   booktitle = {Proceedings of the 40th SIGIR},
   year = {2017},
