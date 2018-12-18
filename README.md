@@ -41,6 +41,8 @@ $ wget http://www.playbigdata.com/dou/DSSA/data_cv.tar.gz # download data
 $ tar xzvf data_cv.tar.gz # uncompress
 ```
 
+You can also download the data from Google Drive [https://drive.google.com/open?id=1D4xXLbrZl013Q6bt9nEK5ZQI0N1U5LQ9][link:data]
+
 Then run the model using downloaded data:
 
 ```shell
@@ -204,10 +206,12 @@ The query suggestions and baseline runs can be downloaded from
 [http://www.playbigdata.com/dou/hdiv/][link:hdiv]
 
 The data required to reproduce the experimental results can be downloaded from
-[http://www.playbigdata.com/dou/DSSA/][link:dssa]
+[http://www.playbigdata.com/dou/DSSA/][link:dssa] or 
+[https://drive.google.com/open?id=1D4xXLbrZl013Q6bt9nEK5ZQI0N1U5LQ9][link:data]
 
 For any issues with the code, feel free to contact `rucjzb AT 163.com`
 
 
 [link:hdiv]: http://www.playbigdata.com/dou/hdiv/
 [link:dssa]: http://www.playbigdata.com/dou/DSSA/
+[link:data]: https://drive.google.com/open?id=1D4xXLbrZl013Q6bt9nEK5ZQI0N1U5LQ9
