@@ -37,11 +37,12 @@ You need first download the required data (use `python run.py -h` to see details
 
 ```shell
 $ cd DSSA # enter project root directory
-$ wget http://www.playbigdata.com/dou/DSSA/data_cv.tar.gz # download data
+$ gdown.pl https://drive.google.com/open?id=1D4xXLbrZl013Q6bt9nEK5ZQI0N1U5LQ9 data_cv.tar.gz # download data
 $ tar xzvf data_cv.tar.gz # uncompress
 ```
 
-You can also download the data from Google Drive [https://drive.google.com/open?id=1D4xXLbrZl013Q6bt9nEK5ZQI0N1U5LQ9][link:data]
+`gdown.pl` can be downloaded from [here](https://github.com/circulosmeos/gdown.pl).
+You can also manually download the data from Google Drive [https://drive.google.com/open?id=1D4xXLbrZl013Q6bt9nEK5ZQI0N1U5LQ9][link:data]
 
 Then run the model using downloaded data:
 
