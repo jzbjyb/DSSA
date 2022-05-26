@@ -2,4 +2,4 @@ numpy==1.12.1
 pandas==0.18.1
 scikit-learn==0.17.1
 scipy==0.17.1
-tensorflow==1.0.1
+tensorflow==2.7.2
